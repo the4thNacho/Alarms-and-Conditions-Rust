@@ -1,0 +1,11 @@
+[package]
+name = "ac-server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-opcua = { version = "0.18", features = ["server"] }
+tokio = { version = "1", features = ["full"] }
+rand = "0.9"
+log = "0.4"
+env_logger = "0.11"
