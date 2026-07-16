@@ -46,6 +46,14 @@ async fn print_subtree(
         .context("browsing event types")?;
 
     for result in results {
+        if result.status_code.is_bad() {
+            log::warn!("browse under {name} failed: {}", result.status_code);
+        }
+
+        if !result.continuation_point.is_null() {
+            log::warn!("browse results truncated under {name}");
+        }
+
         for reference in result.references.unwrap_or_default() {
             // Async recursion requires boxing.
             Box::pin(print_subtree(
