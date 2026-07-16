@@ -46,34 +46,52 @@ pub struct EventRecord {
 }
 
 impl EventRecord {
-    /// Decode a notification's field values; order matches [`EVENT_FIELDS`].
+    /// Decode a notification's field values, looked up by name in [`EVENT_FIELDS`].
     /// Missing or unexpected variants become `None`.
     pub fn from_variants(fields: &[Variant]) -> Self {
-        let get = |i: usize| fields.get(i).unwrap_or(&Variant::Empty);
+        let by_name = |name: &str| -> &Variant {
+            EVENT_FIELDS
+                .iter()
+                .position(|f| *f == name)
+                .and_then(|i| fields.get(i))
+                .unwrap_or(&Variant::Empty)
+        };
 
         let raw: serde_json::Map<String, serde_json::Value> = EVENT_FIELDS
             .iter()
-            .enumerate()
-            .map(|(i, name)| {
-                (
-                    name.to_string(),
-                    serde_json::Value::from(format!("{}", get(i))),
-                )
-            })
+            .map(|name| (name.to_string(), raw_json_value(by_name(name))))
             .collect();
 
         Self {
-            event_id: as_bytes(get(0)),
-            event_type: event_type_name(get(1)),
-            source_name: as_string(get(2)),
-            event_time: as_time(get(3)),
-            severity: as_severity(get(4)),
-            message: as_string(get(5)),
-            condition_name: as_string(get(6)),
-            active: as_bool(get(7)),
-            acked: as_bool(get(8)),
+            event_id: as_bytes(by_name("EventId")),
+            event_type: event_type_name(by_name("EventType")),
+            source_name: as_string(by_name("SourceName")),
+            event_time: as_time(by_name("Time")),
+            severity: as_severity(by_name("Severity")),
+            message: as_string(by_name("Message")),
+            condition_name: as_string(by_name("ConditionName")),
+            active: as_bool(by_name("ActiveState/Id")),
+            acked: as_bool(by_name("AckedState/Id")),
             raw: serde_json::Value::Object(raw),
         }
+    }
+}
+
+/// Render a variant as a clean JSON value for the raw audit column.
+fn raw_json_value(v: &Variant) -> serde_json::Value {
+    match v {
+        Variant::Empty => serde_json::Value::Null,
+        Variant::Boolean(b) => (*b).into(),
+        Variant::UInt16(n) => (*n).into(),
+        Variant::String(s) => s.value().clone().unwrap_or_default().into(),
+        Variant::LocalizedText(t) => t.text.to_string().into(),
+        Variant::ByteString(b) => b
+            .value
+            .as_ref()
+            .map(|bytes| bytes.iter().map(|x| format!("{x:02x}")).collect::<String>())
+            .unwrap_or_default()
+            .into(),
+        other => format!("{other}").into(),
     }
 }
 
@@ -199,5 +217,32 @@ mod tests {
         let record = EventRecord::from_variants(&[Variant::from(ByteString::from(vec![9u8]))]);
         assert_eq!(record.event_id.as_deref(), Some(&[9u8][..]));
         assert_eq!(record.severity, None);
+    }
+
+    #[test]
+    fn raw_json_uses_clean_values() {
+        let record = EventRecord::from_variants(&alarm_variants());
+        assert_eq!(record.raw["Message"], "value exceeded limit"); // not a Debug dump
+        assert_eq!(record.raw["EventId"], "010203"); // hex, not Debug
+        assert_eq!(record.raw["Retain"], true);
+
+        let record = EventRecord::from_variants(&[]);
+        assert_eq!(record.raw["ConditionName"], serde_json::Value::Null); // Empty -> null
+    }
+
+    #[test]
+    fn mismatched_variant_types_decode_to_none() {
+        let mut variants = alarm_variants();
+        variants[4] = Variant::from(UAString::from("not a number")); // Severity slot
+        let record = EventRecord::from_variants(&variants);
+        assert_eq!(record.severity, None);
+    }
+
+    #[test]
+    fn unknown_event_type_falls_back_to_node_id_string() {
+        let mut variants = alarm_variants();
+        variants[1] = Variant::from(NodeId::new(2, 1234u32));
+        let record = EventRecord::from_variants(&variants);
+        assert_eq!(record.event_type.as_deref(), Some("ns=2;i=1234"));
     }
 }
