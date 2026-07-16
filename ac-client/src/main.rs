@@ -6,6 +6,8 @@
 
 mod browse;
 #[allow(dead_code)] // wired in Task 9
+mod db;
+#[allow(dead_code)] // wired in Task 9
 mod subscriber;
 
 use anyhow::Context;
