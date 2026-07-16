@@ -146,6 +146,65 @@ fn event_type_name(v: &Variant) -> Option<String> {
     Some(name)
 }
 
+use std::sync::Arc;
+use std::time::Duration;
+
+use opcua::client::{EventCallback, Session};
+use opcua::types::{
+    AttributeId, ContentFilter, EventFilter, ExtensionObject, MonitoredItemCreateRequest, NodeId,
+    ObjectId, StatusCode, TimestampsToReturn,
+};
+use tokio::sync::mpsc;
+
+/// Create a subscription and an event monitored item on the Server object.
+/// Each received event is decoded into an [`EventRecord`] and sent to `tx`.
+pub async fn subscribe_to_events(
+    session: &Arc<Session>,
+    tx: mpsc::UnboundedSender<EventRecord>,
+) -> Result<(), StatusCode> {
+    let callback = EventCallback::new(move |event: Option<Vec<Variant>>, _item| {
+        if let Some(fields) = event {
+            // A send error just means we are shutting down.
+            let _ = tx.send(EventRecord::from_variants(&fields));
+        }
+    });
+
+    let subscription_id = session
+        .create_subscription(
+            Duration::from_millis(500), // publishing interval
+            12000,                      // lifetime count
+            50,                         // max keep-alive count
+            65535,                      // max notifications per publish
+            0,                          // priority
+            true,                       // publishing enabled
+            callback,
+        )
+        .await?;
+
+    let event_filter = EventFilter {
+        where_clause: ContentFilter { elements: None },
+        select_clauses: Some(select_clauses()),
+    };
+
+    let mut request: MonitoredItemCreateRequest = NodeId::from(ObjectId::Server).into();
+    request.item_to_monitor.attribute_id = AttributeId::EventNotifier as u32;
+    request.requested_parameters.sampling_interval = 100.0;
+    request.requested_parameters.queue_size = 100;
+    request.requested_parameters.filter = ExtensionObject::from_message(event_filter);
+
+    let results = session
+        .create_monitored_items(subscription_id, TimestampsToReturn::Neither, vec![request])
+        .await?;
+    for created in &results {
+        if created.result.status_code.is_bad() {
+            return Err(created.result.status_code);
+        }
+    }
+
+    println!("Subscribed to events on the Server object (subscription {subscription_id}).");
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

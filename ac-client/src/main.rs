@@ -5,9 +5,7 @@
 //! every received event in Postgres.
 
 mod browse;
-#[allow(dead_code)] // wired in Task 9
 mod db;
-#[allow(dead_code)] // wired in Task 9
 mod subscriber;
 
 use anyhow::Context;
@@ -35,8 +33,6 @@ struct Args {
 async fn main() -> anyhow::Result<()> {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
     let args = Args::parse();
-    // used from Task 8 onwards
-    let _ = &args.database_url;
 
     let mut client = ClientBuilder::new()
         .application_name("ac-client")
@@ -66,7 +62,27 @@ async fn main() -> anyhow::Result<()> {
 
     browse::print_event_types(&session).await?;
 
+    // Fail fast if the database is unreachable.
+    let pool = db::connect(&args.database_url)
+        .await
+        .with_context(|| format!("connecting to Postgres at {}", args.database_url))?;
+    println!("Connected to Postgres.");
+
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    let writer = tokio::spawn(db::run_writer(pool, rx));
+
+    subscriber::subscribe_to_events(&session, tx)
+        .await
+        .map_err(|status| anyhow::anyhow!("creating event subscription failed: {status}"))?;
+
+    println!("Receiving events — press Ctrl+C to stop.");
+    tokio::signal::ctrl_c().await.ok();
+
+    println!("Shutting down...");
+    // Disconnecting drops the subscription (and with it the callback holding
+    // the channel sender), which lets the writer drain and exit.
     session.disconnect().await.ok();
     event_loop_handle.await.ok();
+    writer.await.ok();
     Ok(())
 }

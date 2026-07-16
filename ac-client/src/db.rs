@@ -50,7 +50,11 @@ pub async fn run_writer(pool: PgPool, mut rx: mpsc::UnboundedReceiver<EventRecor
                 record.severity.unwrap_or(0),
                 record.message.as_deref().unwrap_or("")
             ),
-            Err(e) => error!("failed to insert event: {e}"),
+            Err(e) => error!(
+                "failed to insert event (type={} time={:?}): {e}",
+                record.event_type.as_deref().unwrap_or("?"),
+                record.event_time
+            ),
         }
     }
 }
