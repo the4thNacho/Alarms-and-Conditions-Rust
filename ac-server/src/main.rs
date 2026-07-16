@@ -137,9 +137,8 @@ async fn run_simulation(
 
         // 1. A randomized BaseEventType event every tick.
         let base_evt = events::build_base_event(&mut rng, &sensor_id, "Sensor1");
-        subscriptions.notify_events(
-            [(&base_evt as &dyn Event, &ObjectId::Server.into())].into_iter(),
-        );
+        subscriptions
+            .notify_events([(&base_evt as &dyn Event, &ObjectId::Server.into())].into_iter());
 
         // 2. Mean-reverting random walk: noise plus a pull toward 8.0 keeps the
         //    value oscillating around the 10.0 limit, so alarms raise AND clear.
@@ -159,7 +158,11 @@ async fn run_simulation(
                 // agrees with the transition just observed.
                 let active = sim.alarm_active();
                 debug_assert_eq!(active, transition == AlarmTransition::Raised);
-                let severity = if active { sim.severity() } else { CLEARED_SEVERITY };
+                let severity = if active {
+                    sim.severity()
+                } else {
+                    CLEARED_SEVERITY
+                };
                 let alarm = events::build_level_alarm(
                     active,
                     sim.value(),
@@ -169,9 +172,8 @@ async fn run_simulation(
                     sim.high_limit(),
                     &namespaces,
                 );
-                subscriptions.notify_events(
-                    [(&alarm as &dyn Event, &ObjectId::Server.into())].into_iter(),
-                );
+                subscriptions
+                    .notify_events([(&alarm as &dyn Event, &ObjectId::Server.into())].into_iter());
                 info!(
                     "alarm {}: value={:.2} severity={}",
                     if active { "RAISED" } else { "CLEARED" },
