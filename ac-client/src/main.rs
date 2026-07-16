@@ -79,10 +79,12 @@ async fn main() -> anyhow::Result<()> {
     tokio::signal::ctrl_c().await.ok();
 
     println!("Shutting down...");
-    // Disconnecting drops the subscription (and with it the callback holding
-    // the channel sender), which lets the writer drain and exit.
     session.disconnect().await.ok();
     event_loop_handle.await.ok();
+    // Drop the last Session reference: the event callback (and the channel
+    // sender it owns) lives inside the Session, so this closes the writer's
+    // channel and lets it drain and exit.
+    drop(session);
     writer.await.ok();
     Ok(())
 }
