@@ -5,7 +5,7 @@
 
 ## Overview
 
-Two independent Rust binaries plus a Dockerized Postgres database:
+Two independent Rust binaries plus Dockerized persistence and exploration tools:
 
 - **`ac-server`** — an OPC UA server that generates Alarms & Conditions events every
   second: plain `BaseEventType` events with randomized content, and
@@ -16,6 +16,8 @@ Two independent Rust binaries plus a Dockerized Postgres database:
   the Server object, subscribes, and stores every received event in Postgres.
 - **Postgres** — runs in a Docker container via `docker-compose.yml`; schema is
   applied automatically on first start.
+- **Metabase** — runs in a Docker container via `docker-compose.yml` and can be
+  pointed at the Postgres `ac_events` database for ad hoc exploration.
 
 Only anonymous authentication and security policy `None` are supported, by design.
 
@@ -42,7 +44,7 @@ Alarms-and-Conditions-Rust/
 │   └── src/{main.rs, simulation.rs, events.rs}
 ├── ac-client/            # self-contained binary crate
 │   └── src/{main.rs, subscriber.rs, db.rs}
-├── docker-compose.yml    # Postgres only
+├── docker-compose.yml    # Postgres + Metabase
 └── db/init.sql           # schema, auto-applied on first container start
 ```
 
@@ -97,6 +99,10 @@ server's event types by browsing at runtime, never from shared definitions.
 - `docker-compose.yml`: `postgres:17-alpine`, port 5432, credentials via
   environment variables, `db/init.sql` mounted into
   `/docker-entrypoint-initdb.d/`.
+- `docker-compose.yml`: `metabase/metabase:latest`, published on host port
+  3001, with Metabase's application state stored in a dedicated Postgres
+  database (`metabase_app`). Metabase can connect to the alarm database by
+  using `postgres` as the hostname on the default compose network.
 - Schema:
 
 ```sql

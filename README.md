@@ -23,7 +23,7 @@ Each crate has its own README with details: [`ac-server/`](ac-server/README.md),
 ## Running
 
 ```bash
-# 1. Start Postgres (schema auto-applies on first start)
+# 1. Start Postgres and Metabase
 docker compose up -d
 
 # 2. Start the server
@@ -37,6 +37,38 @@ docker exec ac-postgres psql -U ac -d ac_events -c \
   "SELECT event_type, severity, condition_name, active, left(message, 60) AS message \
    FROM events ORDER BY id DESC LIMIT 10;"
 ```
+
+## Metabase
+
+The compose stack exposes Metabase through a small gateway on
+http://localhost:3001. Opening that URL now redirects to the live dashboard
+view (`/dashboard/2-ac-alarm-overview#refresh=1`) by default.
+
+Direct Metabase access (without the default redirect) is still available on
+http://localhost:3002.
+
+Metabase stores its own application data in Postgres instead of the embedded
+file DB, which is more reliable for this setup.
+
+After the first Metabase login flow, add the alarm database as a PostgreSQL
+data source with:
+
+- Host: postgres
+- Port: 5432
+- Database: ac_events
+- Username: ac
+- Password: ac
+
+If you already created the `pgdata` volume before this change, the new
+`metabase_app` database will not be created automatically. In that case run:
+
+```bash
+docker exec ac-postgres psql -U ac -d postgres -c "CREATE DATABASE metabase_app;"
+docker compose up -d metabase
+```
+
+Metabase and Postgres share the default Docker Compose network, so the service
+name `postgres` is the correct hostname from inside the Metabase container.
 
 The client's Postgres connection defaults to
 `postgres://ac:ac@localhost:5432/ac_events` and can be overridden with

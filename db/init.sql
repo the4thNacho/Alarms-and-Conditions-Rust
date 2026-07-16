@@ -1,3 +1,5 @@
+CREATE DATABASE metabase_app;
+
 CREATE TABLE events (
   id             BIGSERIAL PRIMARY KEY,
   event_id       BYTEA,
