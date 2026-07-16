@@ -5,6 +5,8 @@
 //! every received event in Postgres.
 
 mod browse;
+#[allow(dead_code)] // wired in Task 9
+mod subscriber;
 
 use anyhow::Context;
 use clap::Parser;
