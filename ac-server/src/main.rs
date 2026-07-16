@@ -32,7 +32,9 @@ const CLEARED_SEVERITY: u16 = 100;
 
 #[tokio::main]
 async fn main() {
-    env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+        .format_timestamp_millis()
+        .init();
 
     let (server, handle) = ServerBuilder::new_anonymous("ac-server")
         .application_uri("urn:AcServer")
